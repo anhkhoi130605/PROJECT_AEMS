@@ -1,0 +1,253 @@
+@model DataAccess.Entities.PaginationResult<DataAccess.Entities.SystemErrorLog>
+
+@{
+    ViewData["Title"] = "System Error Logs";
+    // Layout = "_Layout"; // Ensure this matches your Admin Layout path. 
+    // Assuming _Layout is shared or handled by _ViewStart. If Admin area has specific layout, use it.
+    // For now, assuming default layout works, or user will adjust.
+}
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0 text-primary"><i class="bi bi-journal-medical"></i> System Error Logs</h2>
+        
+        <form asp-action="DeleteOldLogs" method="post" onsubmit="return confirmAction(event, 'Bạn có chắc chắn muốn xóa tất cả log cũ hơn 30 không? Hành động này không thể hoàn tác.', 'Xóa ngay', 'Thôi');">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-trash"></i> Dọn dẹp Log cũ (>30 ngày)
+            </button>
+        </form>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Search Message / Source / User</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" name="search" class="form-control" placeholder="Nhập từ khóa..." value="@ViewBag.Search">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status Code</label>
+                    <select name="statusCode" class="form-select">
+                        <option value="">-- Tất cả --</option>
+                        @foreach (var status in Enum.GetValues(typeof(DataAccess.Enum.SystemLogStatusEnum)))
+                        {
+                            var statusVal = (int)status;
+                            var isSelected = ViewBag.StatusCode == statusVal ? "selected" : "";
+                            // Using raw HTML string builder or just simple logic
+                            <option value="@statusVal" selected="@(ViewBag.StatusCode == statusVal)">@statusVal (@status)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Lọc</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th scope="col" class="ps-3">Time</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Exception / Message</th>
+                            <th scope="col">User</th>
+                            <th scope="col" class="text-end pe-3">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Data.Any())
+                        {
+                            foreach (var log in Model.Data)
+                            {
+                                var badgeClass = "bg-secondary";
+                                if (log.StatusCode >= 200 && log.StatusCode < 300) { badgeClass = "bg-success"; }
+                                else if (log.StatusCode >= 400 && log.StatusCode < 500) { badgeClass = "bg-warning text-dark"; }
+                                else if (log.StatusCode >= 500) { badgeClass = "bg-danger"; }
+
+                                <tr>
+                                    <td class="ps-3 text-nowrap">
+                                        @log.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")
+                                    </td>
+                                    <td>
+                                        <span class="badge @badgeClass">
+                                            @(log.StatusCode?.ToString() ?? "N/A")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>@log.ExceptionType</strong>
+                                        </div>
+                                        <small class="text-muted">
+                                            @if (!string.IsNullOrEmpty(log.ExceptionMessage) && log.ExceptionMessage.Length > 50)
+                                            {
+                                                @log.ExceptionMessage.Substring(0, 50) <text>...</text>
+                                            }
+                                            else
+                                            {
+                                                @log.ExceptionMessage
+                                            }
+                                        </small>
+                                    </td>
+                                    <td>
+                                        @if(!string.IsNullOrEmpty(log.UserId))
+                                        {
+                                             <a href="/UserManagement/Detail/@log.UserId" class="text-decoration-none" target="_blank">
+                                                @log.UserId.Substring(0, 8)...
+                                             </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Anonymous</span>
+                                        }
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                data-bs-toggle="modal" data-bs-target="#logDetailModal"
+                                                data-ex-type="@log.ExceptionType"
+                                                data-ex-msg="@log.ExceptionMessage"
+                                                data-ex-source="@log.Source"
+                                                data-ex-stack="@log.StackTrace"
+                                                title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-check-circle display-4 mb-3 d-block"></i>
+                                    Không tìm thấy log lỗi nào phù hợp.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <partial name="_Pagination" model="Model" />
+    </div>
+</div>
+
+<!-- Log Detail Modal -->
+<div class="modal fade" id="logDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle"></i> Error Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="fw-bold">Exception Type:</label>
+                    <p class="text-danger" id="modalExType">Type</p>
+                </div>
+                <div class="mb-3">
+                    <label class="fw-bold">Source:</label>
+                    <kbd id="modalExSource">Source</kbd>
+                </div>
+                <div class="mb-3">
+                    <label class="fw-bold">Message:</label>
+                    <div class="alert alert-secondary text-break" id="modalExMsg">Message</div>
+                </div>
+                <div class="mb-3">
+                    <label class="fw-bold">Stack Trace:</label>
+                    <pre class="bg-dark text-light p-3 rounded" style="font-size: 0.85rem; max-height: 400px; overflow: auto;" id="modalExStack">
+                        Stack Trace...
+                    </pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="copySystemLogDetails()">
+                    <i class="bi bi-clipboard me-1"></i> Copy All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Detail Modal Container (Shared) -->
+<div class="modal fade" id="userDetailModal" tabindex="-1" aria-labelledby="userQuickDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" id="userDetailModalContent">
+            <!-- Content loaded via AJAX -->
+             <div class="modal-body text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var logDetailModal = document.getElementById('logDetailModal');
+        logDetailModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            
+            var type = button.getAttribute('data-ex-type');
+            var msg = button.getAttribute('data-ex-msg');
+            var source = button.getAttribute('data-ex-source');
+            var stack = button.getAttribute('data-ex-stack');
+            
+            logDetailModal.querySelector('#modalExType').textContent = type || 'Unknown';
+            logDetailModal.querySelector('#modalExMsg').textContent = msg || 'No message';
+            logDetailModal.querySelector('#modalExSource').textContent = source || 'Unknown Source';
+            logDetailModal.querySelector('#modalExStack').textContent = stack || 'No Stack Trace available';
+        });
+
+        function openUserDetail(userId) {
+            var modal = new bootstrap.Modal(document.getElementById('userDetailModal'));
+            modal.show();
+
+             // Load content
+            $('#userDetailModalContent').load('/Admin/UserManagement/GetQuickDetail?id=' + userId, function(response, status, xhr) {
+                if (status == "error") {
+                    $('#userDetailModalContent').html('<div class="modal-body text-danger">Error loading user details.</div>');
+                }
+            });
+        }
+
+        function copySystemLogDetails() {
+            var type = document.getElementById('modalExType').innerText;
+            var source = document.getElementById('modalExSource').innerText;
+            var msg = document.getElementById('modalExMsg').innerText;
+            var stack = document.getElementById('modalExStack').innerText;
+            
+            var content = `Exception Type:\n${type}\n\nSource: ${source}\n\nMessage:\n${msg}\n\nStack Trace:\n${stack}`;
+            
+            navigator.clipboard.writeText(content).then(function() {
+                toastr.success('Đã copy chi tiết lỗi vào clipboard!');
+            }, function(err) {
+                // Fallback
+                var textArea = document.createElement("textarea");
+                textArea.value = content;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    toastr.success('Đã copy chi tiết lỗi vào clipboard!');
+                } catch (err) {
+                    console.error('Fallback copy failed', err);
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+    </script>
+}
