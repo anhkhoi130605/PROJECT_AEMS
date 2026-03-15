@@ -1,0 +1,187 @@
+﻿@model AEMS_Solution.Models.Organizer.Manage.MyEventsViewModel
+@using DataAccess.Enum
+@{
+    ViewData["Title"] = "My Events";
+    Layout = "_Organizerlayout";
+
+    string StatusClass(EventStatusEnum status) => status switch
+    {
+        EventStatusEnum.Draft => "bg-secondary",
+        EventStatusEnum.Pending => "bg-warning text-dark",
+        EventStatusEnum.Approved => "bg-success",
+        EventStatusEnum.Rejected => "bg-danger",
+        EventStatusEnum.Published => "bg-info text-dark",
+        EventStatusEnum.Upcoming => "bg-primary",
+        EventStatusEnum.Happening => "bg-info text-dark",
+        EventStatusEnum.Completed => "bg-success",
+        EventStatusEnum.Cancelled => "bg-dark",
+        _ => "bg-secondary"
+    };
+}
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">📅 My Events</h2>
+        <a asp-controller="Organizer" asp-action="Manage" asp-route-operation="create" class="btn btn-primary shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Create Event
+        </a>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <form class="row g-2 mb-3" method="get" asp-controller="Organizer" asp-action="MyEvents">
+        <div class="col-auto">
+            <input type="text" name="search" value="@Model.Search" class="form-control" placeholder="Search title..." />
+        </div>
+
+        <div class="col-auto">
+            @{ var statuses = new[] { "Draft", "Pending", "Upcoming", "Happening", "Completed", "Cancelled" }; }
+            <select name="status" class="form-select">
+                <option value="">All Status</option>
+                @foreach (var s in statuses)
+                {
+                    <option value="@s" selected="@((Model.Status?.ToString() == s) ? "selected" : null)">@s</option>
+                }
+            </select>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary">Filter</button>
+        </div>
+    </form>
+
+    <table class="table table-bordered table-hover shadow">
+        <thead class="table-dark">
+            <tr>
+                <th>Thumbnail</th>
+                <th>Title</th>
+                <th>Location</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th class="text-center">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var e in Model.Events)
+            {
+                <tr>
+                    <td style="width:120px">
+                        @if (!string.IsNullOrEmpty(e.ThumbnailUrl))
+                        {
+                            <img src="@e.ThumbnailUrl" class="img-fluid rounded" />
+                        }
+                    </td>
+
+                    <td>
+                        <strong>@e.Title</strong>
+                    </td>
+
+                    <td>@e.Location</td>
+
+                    <td class="event-time" data-start="@e.StartTime.ToString("o")" data-end="@e.EndTime.ToString("o")">
+                        <span class="start">@e.StartTime.ToString("dd/MM/yyyy HH:mm")</span>
+                        <br />
+                        →
+                        <br />
+                        <span class="end">@e.EndTime.ToString("dd/MM/yyyy HH:mm")</span>
+                    </td>
+
+                    <td>
+                        <span class="workflow-badge badge @StatusClass(e.Status)">@e.Status</span>
+                    </td>
+
+                    <td class="text-center align-middle">
+                        <div class="d-flex flex-wrap gap-1 justify-content-center align-items-center" style="max-width: 320px; margin: 0 auto;">
+                            <style>
+                                .action-pill {
+                                    min-width: 90px;
+                                    text-align: center;
+                                }
+                            </style>
+                            <a class="btn btn-sm btn-info fw-semibold" asp-controller="Organizer" asp-action="Manage" asp-route-operation="detailevent" asp-route-id="@e.EventId">View</a>
+                            <a asp-action="Edit" asp-route-id="@e.EventId" class="btn btn-sm btn-warning fw-semibold">Edit</a>
+                            @if (e.Status == EventStatusEnum.Approved)
+                            {
+                                <form asp-controller="Organizer" asp-action="Manage" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="operation" value="publish" />
+                                    <input type="hidden" name="id" value="@e.EventId" />
+                                    <button type="submit" class="btn btn-sm btn-success fw-semibold action-pill">Public</button>
+                                </form>
+                            }
+                            @if (e.Status == EventStatusEnum.Draft || e.Status == EventStatusEnum.Rejected)
+                            {
+                                <form asp-controller="Organizer" asp-action="Manage" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="operation" value="sendforapproval" />
+                                    <input type="hidden" name="id" value="@e.EventId" />
+                                    <button type="submit" class="btn btn-sm btn-primary fw-semibold action-pill">Send</button>
+                                </form>
+                            }
+                            <a class="btn btn-sm btn-secondary fw-semibold action-pill" asp-controller="EventWaitlist" asp-action="Index" asp-route-eventId="@e.EventId">Waitlist</a>
+                            @if (e.Status != EventStatusEnum.Cancelled && e.Status != EventStatusEnum.Completed)
+                            {
+                                <form asp-controller="Organizer" asp-action="Manage" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="operation" value="cancel" />
+                                    <input type="hidden" name="id" value="@e.EventId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger fw-semibold action-pill">Cancel</button>
+                                </form>
+                            }
+                            <form asp-controller="Organizer" asp-action="Manage" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="operation" value="softdelete" />
+                                <input type="hidden" name="id" value="@e.EventId" />
+                                <button type="submit" class="btn btn-sm btn-danger fw-semibold action-pill" onclick="return confirm('Bạn có chắc muốn xóa sự kiện này?');">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.TotalPages > 1)
+    {
+        <nav aria-label="Pagination">
+            <ul class="pagination">
+                <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+                    <a class="page-link" asp-action="MyEvents" asp-controller="Organizer" asp-route-page="@(Model.Page - 1)" asp-route-search="@Model.Search" asp-route-status="@Model.Status">Previous</a>
+                </li>
+
+                @for (int i = 1; i <= Model.TotalPages; i++)
+                {
+                    <li class="page-item @(i == Model.Page ? "active" : "")">
+                        <a class="page-link" asp-action="MyEvents" asp-controller="Organizer" asp-route-page="@i" asp-route-search="@Model.Search" asp-route-status="@Model.Status">@i</a>
+                    </li>
+                }
+
+                <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+                    <a class="page-link" asp-action="MyEvents" asp-controller="Organizer" asp-route-page="@(Model.Page + 1)" asp-route-search="@Model.Search" asp-route-status="@Model.Status">Next</a>
+                </li>
+            </ul>
+        </nav>
+        <div class="text-muted">Page @Model.Page of @Model.TotalPages (@Model.TotalItems total items)</div>
+    }
+    @section Scripts {
+
+        <script>
+            (function () {
+                document.querySelectorAll('.view-detail').forEach(btn => {
+                    btn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        var url = btn.getAttribute('data-url');
+                        if (!url) return;
+                        // open detail in new window/tab
+                        window.location.href = url;
+                    });
+                });
+            })();
+        </script>
+    }
+</div>

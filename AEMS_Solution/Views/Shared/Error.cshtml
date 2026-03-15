@@ -1,0 +1,112 @@
+﻿@model AEMS_Solution.Models.Shared.ErrorViewModel
+@using Microsoft.AspNetCore.Diagnostics
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Lỗi hệ thống";
+    var exceptionFeature = Context.Features.Get<IExceptionHandlerPathFeature>();
+    var exception = exceptionFeature?.Error;
+    var path = exceptionFeature?.Path;
+    
+    // Serializing exception for copy content
+    var errorDetails = exception != null 
+        ? $"Source: {path}\nMessage: {exception.Message}\nStack Trace:\n{exception.StackTrace}" 
+        : "No details available.";
+}
+
+<div class="container py-5 text-center">
+    <div class="mb-4">
+        <i class="bi bi-exclamation-triangle-fill text-danger display-1"></i>
+    </div>
+    <h1 class="text-danger mb-3">Đã xảy ra lỗi!</h1>
+    <h4 class="text-muted mb-4">Hệ thống gặp sự cố khi xử lý yêu cầu của bạn.</h4>
+
+    @if (exception != null)
+    {
+        <div class="mb-3">
+            <strong class="text-danger">Error:</strong>
+            <div class="text-danger">@exception?.Message</div>
+            <div class="small text-muted">Source: @path</div>
+        </div>
+    }
+
+    @if (Model.ShowRequestId)
+    {
+        <p class="text-muted">
+            <strong>Request ID:</strong> <code>@Model.RequestId</code>
+        </p>
+    }
+
+    <div class="mt-4">
+        <a href="/" class="btn btn-primary btn-lg">
+            <i class="bi bi-house-door me-2"></i> Về trang chủ
+        </a>
+        
+        @if (exception != null)
+        {
+            <button type="button" class="btn btn-outline-danger btn-lg ms-2" data-bs-toggle="modal" data-bs-target="#errorDetailModal">
+                <i class="bi bi-bug me-2"></i> Xem chi tiết
+            </button>
+        }
+    </div>
+
+    <!-- Error Detail Modal -->
+    <div class="modal fade" id="errorDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content text-start">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Chi tiết lỗi</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <div class="mb-3">
+                        <label class="fw-bold">Nguồn (Source):</label>
+                        <div class="text-secondary">@path</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="fw-bold">Thông báo (Message):</label>
+                        <div class="alert alert-warning text-dark text-break">@exception?.Message</div>
+                    </div>
+                    <div>
+                        <label class="fw-bold">Stack Trace:</label>
+                        <pre class="bg-dark text-light p-3 rounded" style="max-height: 300px; overflow-y: auto; font-size: 0.85rem;">@exception?.StackTrace</pre>
+                    </div>
+                    <!-- Hidden textarea for copying -->
+                    <textarea id="hiddenErrorContent" class="d-none">@errorDetails</textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-lg me-1"></i> Đóng
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="copyErrorDetails()">
+                        <i class="bi bi-clipboard me-1"></i> Copy All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function copyErrorDetails() {
+            var content = document.getElementById('hiddenErrorContent').value;
+            navigator.clipboard.writeText(content).then(function() {
+                toastr.success('Đã copy chi tiết lỗi vào clipboard!');
+            }, function(err) {
+                console.error('Không thể copy: ', err);
+                // Fallback for older browsers
+                var textArea = document.createElement("textarea");
+                textArea.value = content;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    toastr.success('Đã copy chi tiết lỗi vào clipboard!');
+                } catch (err) {
+                    toastr.error('Lỗi copy: ' + err);
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+    </script>
+}
